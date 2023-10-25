@@ -1,36 +1,102 @@
 "use client";
-
 import { UploadDropzone } from "@/utils/uploadthing";
-import imglyRemoveBackground from "@imgly/background-removal";
+import imglyRemoveBackground, { type Config } from "@imgly/background-removal";
 import Image from "next/image";
 import { useState } from "react";
+import * as _Jimp from "jimp";
+import createDuotoneEffect from "@/utils/createDuotone";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const Jimp = typeof self !== "undefined" ? self.Jimp || _Jimp : _Jimp;
 
 interface ImageInfo {
   name: string;
   url: string;
   size: number;
+  modifiedUrl?: string;
+  progress?: string;
+  whiteUrl?: string;
+  blackUrl?: string;
 }
 
 export default function ExampleUploader() {
-  const [srcImg, setSrcImg] = useState<ImageInfo[]>([]);
-  const [bgImage, setBgImage] = useState<string[]>([]);
+  const [images, setImages] = useState<ImageInfo[]>([]);
 
-  const handleSrcImg = (src: ImageInfo[]) => {
-    setSrcImg((prevSrcImg) => [...prevSrcImg, ...src]);
+  const handleImageUpload = (newImages: ImageInfo[]) => {
+    setImages((prevImages) => [...prevImages, ...newImages]);
+    console.log(images);
   };
 
   const handleBgRemoval = async (index: number) => {
-    const image_src = srcImg[index]?.url;
+    const imageInfo = images[index];
+    const imageSrc = imageInfo?.url;
+
+    const config: Config = {
+      progress: (key, current, total) => {
+        const progressString = `Downloading ${key}: ${current} of ${total}`;
+        console.log(progressString);
+        const updatedImages = [...images];
+        updatedImages[index] = { ...imageInfo, progress: progressString };
+        setImages(updatedImages);
+      },
+    };
 
     try {
-      const blob = await imglyRemoveBackground(image_src, { progress });
+      const blob = await imglyRemoveBackground(imageSrc, config);
       const url = URL.createObjectURL(blob);
 
-      // Remove the "blob:" prefix and add the modified URL to the bgImage array
-      setBgImage((prevBgImg) => [...prevBgImg, url]);
+      const updatedImages = [...images];
+      updatedImages[index] = {
+        ...imageInfo,
+        modifiedUrl: url,
+        progress: undefined,
+      }; // Clear progress after the background removal is complete
+      setImages(updatedImages);
     } catch (error) {
       console.error("Error while removing the background:", error);
     }
+  };
+
+  const handleColorTone = async (src, color: string, index: number) => {
+    // const MIME = Jimp.MIME_PNG;
+    // const imageInfo = images[index];
+    // await Jimp.read(src)
+    //   .then((image) => {
+    //     return image
+    //       .color([
+    //         { apply: color === "white" ? "lighten" : "darken", params: [100] },
+    //       ])
+    //       .getBase64Async(MIME)
+    //       .then((src) => {
+    //         const updatedImages = [...images];
+    //         if (color === "white") {
+    //           updatedImages[index] = { ...imageInfo, whiteUrl: src };
+    //         }
+    //         if (color === "black") {
+    //           updatedImages[index] = { ...imageInfo, blackUrl: src };
+    //         }
+    //         setImages(updatedImages);
+    //       })
+    //       .catch((err) => console.log("saveError", err));
+    //   })
+    //   .catch((err) => {
+    //     console.log("ToneError: ", err);
+    //   });
+    const imageInfo = images[index];
+    const primCol = color == "white" ? "#ffffff" : "#000000";
+    const secCol = color == "white" ? "#000000" : "#ffffff";
+    const updatedImages = [...images];
+    // const dtImg = createDuotone(src, primCol, secCol);
+
+    createDuotoneEffect(src, primCol, secCol, function (duotoneImageUrl) {
+      color === "white"
+        ? (updatedImages[index] = { ...imageInfo, whiteUrl: duotoneImageUrl })
+        : (updatedImages[index] = { ...imageInfo, blackUrl: duotoneImageUrl });
+
+      setImages(updatedImages);
+    });
   };
 
   return (
@@ -40,8 +106,7 @@ export default function ExampleUploader() {
         onClientUploadComplete={(res) => {
           // Do something with the response
           console.log("Files: ", res);
-          handleSrcImg(res);
-          // alert("Upload Completed");
+          handleImageUpload(res);
         }}
         onUploadError={(error: Error) => {
           // Do something with the error.
@@ -49,78 +114,117 @@ export default function ExampleUploader() {
         }}
       />
 
-      <div className="grid grid-cols-2 gap-5">
-        <div>
-          {srcImg.length > 0 && (
-            <div className="flex flex-col gap-5">
-              {srcImg.map((s, index) => (
-                <div
-                  key={s.name}
-                  className="flex items-center justify-center gap-5 text-center"
+      <div className="flex flex-col gap-5">
+        {images.map((image, index) => (
+          <div
+            key={image.name}
+            className="flex items-center justify-between gap-5 rounded-lg bg-slate-200 p-10 text-center"
+          >
+            <div className="flex h-72 flex-col items-center justify-start">
+              <div className="relative h-52 w-52 object-cover">
+                <Image src={image.url} alt={image.name} fill={true} />
+              </div>
+              <span className="w-48 text-sm">
+                <p>{image.name}</p>
+                <p>{`(${image.size}b)`}</p>
+              </span>
+              {/* <button
+                className="rounded-lg bg-blue-400 p-3 text-white"
+                onClick={() => handleColorTone(image.url, "white")}
+              >
+                white
+              </button>
+              <button
+                className="rounded-lg bg-blue-400 p-3 text-white"
+                onClick={() => handleColorTone(image.url, "black")}
+              >
+                black
+              </button> */}
+            </div>
+            {image.progress ?? image.modifiedUrl ? (
+              ""
+            ) : (
+              <>
+                <button
+                  className="rounded-lg bg-blue-400 p-3 text-white"
+                  onClick={() => handleBgRemoval(index)}
                 >
-                  <div className="flex flex-col items-center justify-center">
-                    <Image
-                      src={s.url}
-                      alt={s.name}
-                      width={200}
-                      height={200}
-                      placeholder="blur"
-                      blurDataURL="/blur.webp"
-                    />
-                    <span>
-                      {/* <p>{s.name}</p> */}
-                      <p>
-                        {"("}
-                        {s.size}
-                        {"b)"}
-                      </p>
-                    </span>
-                  </div>
-                  <button
-                    className="rounded-lg bg-blue-400 p-3 text-white"
-                    onClick={() => handleBgRemoval(index)}
-                  >
-                    {" "}
-                    removeBG{" "}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  Remove BG
+                </button>
+                {/* <button
+                  className="rounded-lg bg-blue-400 p-3 text-white"
+                  onClick={() => handleColorTone(image.url, "white", index)}
+                >
+                  whiten
+                </button>
+                <button
+                  className="rounded-lg bg-blue-400 p-3 text-white"
+                  onClick={() => handleColorTone(image.url, "black", index)}
+                >
+                  blacken
+                </button> */}
+              </>
+            )}
 
-        <div>
-          {bgImage.length > 0 && (
-            <div>
-              {bgImage.map((s, index) => (
-                <div key={s} className="relative">
-                  <Image
-                    src={s}
-                    alt={s}
-                    width={200}
-                    height={200}
-                    unoptimized
-                    placeholder="blur"
-                    blurDataURL="/blur.webp"
-                  />
-                  <button
-                    className="absolute right-0 top-0 rounded-lg bg-blue-400 p-3 text-white"
-                    onClick={() => handleTurnImageBlack(index)}
-                  >
-                    Black
-                  </button>
-                  <button
-                    className="absolute right-16 top-0 rounded-lg bg-red-400 p-3 text-white"
-                    onClick={() => handleTurnImageWhite(index)}
-                  >
-                    White
-                  </button>
+            {image.progress && (
+              <div className="text-blue-400">{image.progress}</div>
+            )}
+            {image.modifiedUrl && (
+              <>
+                <div className="flex h-72 flex-col items-center justify-start">
+                  <div className="relative h-52 w-52 object-cover">
+                    <Image
+                      src={image.modifiedUrl}
+                      alt={`${image.name} (BG Removed)`}
+                      fill={true}
+                      blurDataURL={image.url}
+                      placeholder={"blur"}
+                    />
+                  </div>
+                  <span>
+                    <p className="w-48 text-sm">{`${image.name} (BG Removed)`}</p>
+                  </span>
                 </div>
-              ))}
-              {/* <Image src={bgImage} alt="lol" width={100} height={100} /> */}
-            </div>
-          )}
-        </div>
+              </>
+            )}
+            {image.whiteUrl ? (
+              <div className="relative h-40 w-40 bg-black object-cover">
+                <Image src={image.whiteUrl} alt={image.name} fill={true} />
+              </div>
+            ) : (
+              <button
+                className="rounded-lg bg-blue-400 p-3 text-white"
+                onClick={() =>
+                  handleColorTone(
+                    image.modifiedUrl ? image.modifiedUrl : image.url,
+                    "white",
+                    index,
+                  )
+                }
+              >
+                whiten
+              </button>
+            )}
+            {image.blackUrl ? (
+              <div className="relative h-40 w-40 bg-white object-cover">
+                <Image src={image.blackUrl} alt={image.name} fill={true} />
+              </div>
+            ) : (
+              <button
+                className="rounded-lg bg-blue-400 p-3 text-white"
+                onClick={() =>
+                  handleColorTone(
+                    image.modifiedUrl ? image.modifiedUrl : image.url,
+                    "black",
+                    index,
+                  )
+                }
+              >
+                blacken
+              </button>
+            )}
+          </div>
+        ))}
       </div>
     </main>
   );

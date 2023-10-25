@@ -16,6 +16,8 @@
     "jsx": "preserve",
     "incremental": true,
     "noUncheckedIndexedAccess": true,
+    "allowSyntheticDefaultImports": true,
+    "useModuleInterop": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
